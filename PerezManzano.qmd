@@ -1,0 +1,801 @@
+---
+title: "Modelos para Datos de Conteo"
+author: "Carlos Pérez Manzano"
+lang: es
+format: 
+  html:
+    toc: true
+    embed-resources: true
+  pdf:
+    toc: true
+    include-in-header: 
+      text: |
+        \usepackage{fvextra}
+        \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}         
+    include-before-body:
+      text: |
+        \RecustomVerbatimEnvironment{verbatim}{Verbatim}{
+          showspaces = false,
+          showtabs = false,
+          breaksymbolleft={},
+          breaklines
+          % Note: setting commandchars=\\\{\} here will cause an error 
+        }                   
+    
+editor: source
+execute: 
+  error: true
+---
+
+\newpage
+
+## Modelos aplicados en el análisis
+
+Recogemos los modelos estudiados más relevantes del estudio:
+
+1. Modelos lineales generalizados (Poisson y Binomial Negativa)
+  * model.poiss_full: modelo Poisson incluyendo todas las variables explicativas.
+  * model.poiss_best: modelo Poisson con variables explicativas X1, X2, X4, X8, X11.
+  * model.bn_full: modelo de familia Binomial Negativa con todas las variables predictoras.
+  * model.bn_best: modelo de familia Binomial Negativa incluyendo X1, X2, X4, X11.
+
+2. Modelos aditivos generalizados
+  * model.gam_full: modelo con todas las variables regresoras.
+  * model.gam_X11tp: modelo considerando únicamente la variable X11 como predictora y spline de regresión de placa delgada.
+  * model.gam_X11ts: modelo considerando únicamente la variable X11 como predictora y spline de regresión de placa delgada penalizada.
+  * model.gam_X11cr: modelo considerando únicamente la variable X11 como predictora y spline cúbico.
+  
+3. Modelos mediante regresión polinomial
+  * model.poly_8: regresión polinomial con X11 como única variable regresora de grado 8.
+  
+4. Modelos de regresión a través de splines
+  * model.spline: regresión a través de splines tomando como nodos el 0 y 1.
+
+\newpage
+
+## Resumen ejecutivo
+
+### Introducción
+
+El proyecto consiste en la utilización de distintas técnicas para el ajuste de una variable objetivo que es de tipo conteo. Estas son variables discretas no negativas y representan el número de veces que ocurre un evento en un determinado período de tiempo o espacio. Este tipo de dato requiere de modelos específicos que desarrollaremos. Para la ejemplificación de estos modelos se disponde del conjunto de datos **"data.xlsx"**, del que desconocemos la naturaleza ni el significado de las variables que lo componen.
+
+Para la comparación entre los distintos modelos, nos basaremos principalmente en el criterio *AIC*, que tiene en cuenta tanto el ajuste como la complejidad del modelo, la desviación residual siempre que sea posible y por último el test Anova.
+
+### Análisis exploratorio
+
+En el conjunto de datos contamos con un total de 1999 observaciones de 14 variables. La variable objetivo es nombrada como `var_obj` y las variables regresoras $X1,X2,\dots X13$. Todas son continuas, excepto $X13$ que es categórica con 4 niveles. 
+
+Como hemos dicho anteriormente, la variable objetivo es de tipo conteo, y se puede ver en este gráfico como se ajustan a las distribuciones teóricas de las distribuciones Poisson y Binomial Negativa.
+
+![Distribución empírica vs teórica](img/comp_Pois_Bin.png)
+
+En cuanto a las variables continuas, se realiza la transformación logarítmica a las variables $X1$ y $X2$ debido a la alta presencia de outliers, renombrándolas como $X1\_trans$ y $X2\_trans$ respectivamente.
+
+### Modelos lineales generalizados
+
+Respecto al modelo Poisson, se parte del modelo con todas las variables **model.poiss_full**, y eliminamos variables mediante el criterio de menor *AIC*, llegando al modelo **model.poiss_best**, que incluye las variables $X1\_trans$, $X2\_trans$, $X4$, $X8$ y $X11$.
+Para este modelo final, los coeficientes son muy cercanos a 0, exceptuando la variable $X11$ que tiene un valor aproximado de 3.19. Por tanto el modelo estima que por cada unidad adicional de la variable $X11$, el valor de `var_obj` se incrementa en $e^{3.19}\approx 24.3$.
+
+En cuanto al modelo mediante la Binomial Negativa, de igual manera se realiza **model.bn_full** con todas las variables, y eliminando variables llegamos a **model.bn_best**. Llegamos a la conlusión de que no hay diferencias significativas con el modelo Poisson, luego escogeremos este último como representante.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+ & AIC & Devianza \\
+\hline
+model.poiss\_full & 7495.794 & 118.6009 \\
+model.bn\_full & 7498.059 & 120.7888 \\
+\hline
+\end{tabular}
+\caption{Tabla de AIC y Devianza añadiendo GAM}
+\end{table}
+
+### Modelos Adivitivos Generalizados
+
+Partimos de **model.gam_full**. el modelo aditivo generalizado con todas las variables y el tipo de spline por defecto, que es spline de regresión de placa delgada. El objetivo es realizar a través de este la selección de variables y posteriormente seleccionar el tipo de spline más adecuado. Con este primer modelo ya podemos observar una disminución considerable en el *AIC*, con valor de 7420.893 y sobre todo en la devianza, 20.07102. Además, el valor del $R^2_{adj}$ es de 0.997 aproximadamente. Esto nos hace sospechar un posible problema de concurvidad, lo que conduciría a modelos poco eficientes. 
+
+Mediante un proceso de eliminación de las variables con mayor concurvidad, llegando al modelo incluyendo las variables $X2\_trans$, $X3$, $X8$, $X9$, $X11$ y $X12$ con este problema ya solucionado. Sin embargo, para todas las variables del modelo se rechazan rotundamente los test individuales de significatividad, excepto el de la variable $X11$. Por ello, se realiza el modelo **model.gam_X11tp**, en el que solo se incluye la variable $X11$ como predictora. Realizando el test anova para compararla con **model.gam_full**, aceptamos la igualdad de modelos. Mostramos en la siguiente tabla los resultados de bondad del modelo.
+
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+ & AIC & Devianza \\
+\hline
+model.poiss\_full & 7495.794 & 118.6009 \\
+model.bn\_full & 7498.059 & 120.7888 \\
+model.gam\_full & 7420.893 & 20.07102 \\ 
+model.gam\_X11tp & 7400.386 & 21.53563 \\ 
+\hline
+\end{tabular}
+\caption{Tabla de AIC y Devianza añadiendo GAM}
+\end{table}
+
+Seleccionaremos por tanto **model.gam_X11tp** como mejor modelo aditivo generalizado, debido a que tiene un *AIC* bastante más reducido que **model.gam_full** y la variación en la devianza no es para nada elevada.
+
+Posteriormente, debido a que desconocemos la naturaleza de los datos, comprobamos si los resultados son mejores variando el tipo de spline empleado en el modelo. Sin embargo, las diferencias son mínimas. Se puede consultar el anexo para más detalle.
+
+
+### Modelos de Regresión Polinómica
+
+Llegados a este punto, es claro que es suficiente con considerar la variable $X11$ para la predicción. Realizamos un proceso de elección del mejor grado del polinomio tomando como criterio el test anova, es decir, se toma el grado para el cual no se mejora el modelo tomando como hiperparámetro el grado posterior. Esocgemos los posibles valores entre 1 y 10 y no superiores para evitar sobreajuste. De esta manera, obtenemos **model.poly_8**, tomando grado 8. Se muestra la tabla con los modelos actuales.
+
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+ & AIC & Devianza \\
+\hline
+model.poiss\_full & 7495.794 & 118.6009 \\
+model.bn\_full & 7498.059 & 120.7888 \\
+model.gam\_full & 7420.893 & 20.07102 \\ 
+model.gam\_X11tp & 7400.386 & 21.53563 \\ 
+model.gam\_X11ts & 7400.385 & 21.53674 \\ 
+model.gam\_X11cr & 7401.010 & 21.99967 \\ 
+model.poly\_8 & 670.896 & NA \\
+\hline
+\end{tabular}
+\caption{Tabla de AIC y Devianza añadiendo Regresión Polinómica}
+\end{table}
+
+Obtenemos un *AIC* realmente bueno. Veamos un gráfico del ajuste del modelo.
+
+![Ajuste del modelo polinómico](img/model.poly_8.png)
+
+\newpage
+
+### Modelos de Regresión mediante Splines
+
+Se realiza un modelo con nodos en el 0 y 1, para captar los cambios de comportamiento entre $X11$ y `var_obj`. 
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+ & AIC & Devianza \\
+\hline
+model.poiss\_full & 7495.794 & 118.6009 \\
+model.bn\_full & 7498.059 & 120.7888 \\
+model.gam\_full & 7420.893 & 20.07102 \\ 
+model.gam\_tp & 7400.386 & 21.53563 \\ 
+model.gam\_ts & 7400.385 & 21.53674 \\ 
+model.gam\_cr & 7401.010 & 21.99967 \\ 
+model.poly\_8 & 670.896 & NA \\
+model.spline & 897.5015 & NA \\
+\hline
+\end{tabular}
+\caption{Tabla de AIC y Devianza añadiendo Regresión Polinómica}
+\end{table}
+
+Obtenemos buenos resultados, sin emabrgo son aparentemente mejores para el regresor polinomial.
+
+\newpage
+
+### Selección final y evaluación
+
+Teniendo en cuenta la exposición de los modelos anteriores el modelo final escogido será el polinómico de grado 8. Por último incluimos una prueba para refutar la existencia de sobreajuste. Dividimos el conjunto de datos en entrenamiento y test, ajustamos el modelo polinomial de grado 8 para el conjunto de entrenamiento y evaluamos en el conjunto test. Mostramos la gráfica del ajuste al conjunto de prueba.
+
+![Ajuste en el conjunto test](img/model.poly_8_test.png)
+
+El ajuste es realmente bueno. Concluimos que la variable $X11$ puede modelar casi por completo a la variable `var_obj`, hay una dependencia clara entre ambas. A continuación se muestra el anexo, donde se puede ver con detalle el desarrollo del proyecto y algunos análisis complementarios.
+
+\newpage
+
+## Anexo
+
+#### Ánalisis exploratorio
+
+Cargamos en primer lugar los paquetes necesarios.
+
+```{r, warning = FALSE, message = FALSE}
+library(openxlsx)
+library(usdm)
+library(MASS)
+library(dplyr)
+library(AER)
+library(ggplot2)
+library(gridExtra)
+library(mgcv)
+library(gamair)
+library(splines)
+```
+
+Cargamos el dataset.
+
+```{r}
+datos = read.xlsx("data.xlsx")
+head(datos)
+```
+
+
+```{r}
+sapply(datos, function(x) sum(is.na(x)))
+```
+No tenemos valores nulos en ninguna de las variables.
+
+```{r}
+summary(datos)
+```
+Todas las variables explicativas son continuas, excepto la variable `X13` que debemos codificar como factor.
+
+```{r}
+datos$X13 <- factor(datos$X13, levels = unique(datos$X13))
+```
+
+```{r}
+ggplot(datos, aes(x = var_obj, fill = X13)) +
+  geom_histogram(binwidth=1) +
+  facet_grid(X13 ~ ., margins=TRUE, scales="free")
+```
+
+Se aprecia como según la clase de `X13`, los valores de `var_obj` se mueven en un rango ligeramente distinto, siendo menores los valores para la clase A y mayores para la clase D. 
+
+
+Vamos a detectar las variables continuas que contengan outliers y tomar la transformación logarítmica en los casos en los que sea posible, es decir, si los valores que toma la variable son todos positivos.
+
+```{r}
+varout = rep(FALSE, ncol(datos)-2)
+names(varout) = names(datos)[-c(1,ncol(datos))]
+for (i in names(varout)){
+  varout[i] = length(boxplot(datos[i], plot = FALSE)$out) > 0
+}
+
+cat("Las variables", paste(names(varout[varout]), collapse = ", "), "contienen outliers\n")
+for (i in names(varout[varout])){
+  boxplot(datos[i], main = i)
+  if (all(datos[i]>0)){
+    datos[i] = log(datos[i])
+    names(datos)[which(names(datos) == i)] = paste(i , "_trans", sep = "")
+  }
+}
+
+```
+
+Veamos el histograma de `var_obj`, que es una variable discreta de conteo.
+
+```{r}
+ggplot(datos, aes(x = var_obj)) +
+  geom_histogram( binwidth = 1) + 
+  labs(y = "")
+```
+
+Vamos a compararlo con la función de probabilidad de la Poisson con parámetro $\lambda$ igual a la media muestral.
+
+```{r, warning = FALSE}
+df1<-data.frame(table(datos$var_obj))
+names(df1)<-c("values","Freq")
+df1$Tipo<-"Empírica"
+df1$Freq<-df1$Freq/sum(df1$Freq)
+media<-mean(datos$var_obj)
+rango = range(datos$var_obj)[1]:range(datos$var_obj)[2]
+df2<-data.frame(values=rango, Freq = dpois(rango,lambda=media))
+df2$Tipo<-"Teórica"
+df<-rbind(df1,df2)
+
+(grafico1 = ggplot(data=df, aes(x=values, y=Freq, fill=Tipo)) +
+    geom_bar(stat="identity", position=position_dodge()) +
+    labs(title = "Dis. Empírica vs Poisson",
+       y = "") + 
+    theme(axis.text.x = element_blank()))
+
+```
+
+
+```{r}
+xempp <- seq(min(datos$var_obj), max(datos$var_obj), by=0.01)
+plot(xempp, ppois(xempp, lambda=media), type="l", col="green", xlab="var_obj",
+ylab="ppois(var_obj)")
+plot(ecdf(datos$var_obj), col="red",add=TRUE)
+```
+
+Comparamos con la Binomial Negativa
+
+```{r, warning=FALSE}
+df1 <- data.frame(table(datos$var_obj))
+names(df1) <- c("values", "Freq")
+df1$Tipo <- "Empírica"
+df1$Freq <- df1$Freq / sum(df1$Freq)
+
+media <- mean(datos$var_obj)
+varianza <- var(datos$var_obj)
+size <- media^2 / (varianza - media)  # size = mu^2 / (sigma^2 - mu)
+size <- ifelse(size > 0, size, 1)
+
+rango <- range(datos$var_obj)[1]:range(datos$var_obj)[2]
+
+df2 <- data.frame(values = rango, Freq = dnbinom(rango, size = size, mu = media))
+df2$Tipo <- "Teórica"
+df <- rbind(df1, df2)
+
+(grafico2 =ggplot(data = df, aes(x = values, y = Freq, fill = Tipo)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    labs(title = "Dis. Empírica vs Binomial Negativa",
+       y = "") +  
+    theme(axis.text.x = element_blank()))
+
+```
+
+Hay parecidos razonables entre las distribuciones empíricas y las teóricas, tanto para Poisson como Binomial Negativa. Es por ello que parece razonable la adopción de modelos para ambas familias.
+
+
+Veamos la posibilidad de multicolinealidad en los datos.
+
+```{r}
+usdm::vif(datos[,-c(1,14)])
+```
+
+Tenemos una multicolinealidad moderada, sobre todo debido a la variable `X1_trans`. Sin embargo, como no existe ninguna variable con un *VIF* mayor que 10, no es claro un problema de multicolinealidad.
+
+#### Regresión de Poisson
+
+Vamos a realizar el modelo de regresión Poisson incluyendo todas las variables explicativas.
+
+```{r}
+model.poiss <- glm(data=datos,var_obj ~ . , family="poisson")
+summary(model.poiss)
+```
+```{r}
+bondad = data.frame(AIC = AIC(model.poiss), dev = model.poiss$deviance)
+rownames(bondad)[1] = "pois.full"
+```
+
+
+El modelo con todas las variables tiene un gran número de variables que son despreciables. La devianza residual del modelo es 112.59 y tiene un *AIC* de 7509.8.
+
+```{r}
+model.poiss <- update(model.poiss, . ~ . - X3 - X5 - X6 - X7 - X10 - X12)
+summary(model.poiss)
+```
+La varianza residual en este caso es 113.11, lo que indica que ha experimentado un aumento con respecto al modelo anterior, aunque dicho incremento no es significativo. Por otro lado, debido a la reducción de la complejidad el *AIC* ha reducido su valor a 7498.3.
+
+Veamos el modelo únicamente con las variables regresoras que son significativas en este momento.
+
+```{r}
+model.poiss <- glm(data=datos,var_obj ~ X1_trans + X2_trans + X4 + X11 , family="poisson")
+summary(model.poiss)
+```
+Experimentamos de nuevo algo de incremento en la devianza residual, pero una disminución del *AIC*. 
+
+Con idea de tener un modelo lo más interpretable posible, vamos a escoger aquel con un menor *AIC*.
+
+
+```{r}
+model.poiss_full = glm(data = datos, var_obj ~., family = "poisson")
+model.poiss_best<-MASS::stepAIC(model.poiss_full, trace = 0)
+summary(model.poiss_best)
+```
+```{r}
+bondad = rbind(bondad, data.frame(AIC = AIC(model.poiss_best), dev = model.poiss_best$deviance))
+rownames(bondad)[nrow(bondad)] = "pois.red"
+```
+
+
+Las variables escogidas para el modelo son `X1_trans`, `X2_trans`, `X4`, `X8` y `X11`. Teniendo en cuenta que $$ 
+E(Y_i \mid x_i) = \exp\left( \beta_0 + \beta_1 X1\_trans_{i} + \beta_2 X2\_trans_{i} + \beta_3 X4_i + \beta_4 X8_i + \beta_5 X11_i \right) $$
+
+
+todas las variables producen una disminución de `var_ob` excepto la variable `X11`, que es la más significativa, siendo el valor del parámetro correspondiente igual a 3.19. Por tanto, por cada unidad adicional en $X11$ el valor de `var_obj` se multiplica por $\exp(3.19) \approx 24.3$.
+
+Representemos gráficamente la variable `X11` frente a `var_obj`.
+
+```{r}
+ggplot(data = datos, aes(x = X11, y = var_obj))+
+  geom_point() + 
+  labs(title = "X11 VS var_obj")
+```
+
+Podemos observar un comportamiento particularmente interesante. Y es que, para los valores de `X11` negativos son los casos en los que la variable objetivo toma un valor nulo, mientras que a medida que la variable predictora comienza a tomar valores positivos, el valor de `var_obj` comienza a dispararse.
+
+
+El modelo de regresión de Poisson tiene como hipótesis la igualdad de media y varianza. En caso de que la varianza sea mayor que la media, es más recomendable emplear un modelo Quasi-Poisson, que supone que la varianza es una función lineal de la media.
+
+
+Veamos la relación de la media y varianza según la clase de $X13$.
+
+```{r}
+nd = dim(datos)[1]
+rel_var_media = datos %>% group_by(X13) %>% 
+  summarise(media = mean(var_obj), sigma2 = (nd-1)*var(var_obj)/nd)
+
+rel_var_media
+```
+
+```{r, message = FALSE}
+ggplot(data = rel_var_media, aes(x = media, y = sigma2)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color = "purple") + 
+  labs(title= "Relacion media y varianza")
+```
+
+Realicemos el test de igualdad de media y varianza.
+
+```{r}
+dispersiontest(model.poiss_best)
+```
+
+Aceptamos la igualdad de media y varianza, por tanto es correcto el modelo Poisson.
+
+Veamos una comparación entre las predicciones y los valores observados.
+
+```{r}
+predicciones <- predict(model.poiss_best, type = "response")
+observados <- datos$var_obj
+
+ggplot(data = data.frame(pred = predicciones, obs = observados, X13 = datos$X13), 
+       aes(x = pred, y = obs, color = X13)) + 
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "blue") + 
+  labs(title = "Predicciones vs Observados")
+
+```
+
+#### MLG Binomial Negativa
+
+Realicemos el modelo para la Binomial Negativa, aunque debido a que hemos aceptado la igualdad de media y varianza no sería necesario.
+
+Realicemos en primer lugar el modelo con todas las variables.
+
+
+```{r, warning = FALSE}
+model.bn_full = glm.nb(var_obj~., data = datos)
+summary(model.bn_full)
+```
+Tomemos ahora el modelo con las variables finales del modelo de Poisson.
+
+```{r, warning = FALSE}
+formula = "X1_trans + X2_trans + X4 + X8 + X11"
+formula = as.formula(paste("var_obj~", formula))
+model.bn_best = glm.nb(formula, data = datos)
+summary(model.bn_best)
+```
+
+```{r}
+anova(model.bn_full, model.bn_best)
+```
+
+Aceptamos el test anova, por tanto escogemos el modelo con un menor número de variables.
+
+```{r, warning = FALSE}
+m = update(model.bn_best, . ~. - X8)
+anova(model.bn_best, m)
+```
+
+Podemos escoger el modelo eliminando la variable `X8`.
+
+```{r}
+model.bn_best = m
+summary(model.bn_best)
+```
+
+```{r}
+plot(data.frame(datos$var_obj,model.bn_best$resid), main = "var_obj VS residuos",
+     xlab = "var_obj", ylab = "residuos")
+```
+
+Observamos como la varianza de los residuos es mayor conforme los valores de la variable objetivo son menores.
+
+
+```{r}
+predicciones <- predict(model.bn_best, type = "response")
+observados <- datos$var_obj
+
+ggplot(data = data.frame(pred = predicciones, obs = observados, X13 = datos$X13), 
+       aes(x = pred, y = obs, color = X13)) + 
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "blue") + 
+  labs(title = "Predicciones vs Observados")
+
+```
+
+
+
+Comparemos con el modelo de Poisson.
+
+```{r}
+bn = with(model.bn_best, cbind(res.deviance = deviance, df = df.residual,
+               AIC = aic, p = pchisq(deviance, df.residual, lower.tail=FALSE)))
+
+pois = with(model.poiss_best, cbind(res.deviance = deviance, df = df.residual, 
+               AIC = aic, p = pchisq(deviance, df.residual, lower.tail=FALSE)))
+comp = data.frame(rbind(bn,pois))
+rownames(comp) = c("bin.neg", "poisson")
+comp
+```
+
+
+```{r}
+X2 <- 2 * (logLik(m) - logLik(model.poiss_best))
+X2
+```
+```{r}
+pchisq(X2, df = 1, lower.tail=FALSE)
+```
+
+En definitiva, no hay diferencias razonables entre los modelos de Poisson y Binomial Negativa. Escogeremos el modelo de Poisson, pues el correspondiente a la Binomial Negativa añade un parámetro de dispersión que no es necesario y por tanto añade complejidad. 
+
+
+
+Veamos como maneja los ceros el modelo.
+
+
+```{r}
+sum(datos$var_obj==0)
+```
+```{r}
+sum(round(model.poiss_best$fitted.values)==0)
+```
+
+No va a ser necesario por tanto modelos ideados para excesos de ceros, como ZAP, ZAPNB, ZIP o ZINP.
+
+
+#### Modelos aditivos generalizados
+
+Planteamos en primer lugar el modelo incluyendo todas las variables, excluyendo la variable categórica `X13`. Tomamos el tipo de spline por defecto (spline de regresión de placa delgada).
+
+```{r}
+model.gam_fulltp=gam(var_obj~s(X1_trans)+s(X2_trans)+s(X3)+s(X4)+s(X5)+s(X6)+s(X7)+s(X8)
+              +s(X9)+s(X10)+s(X11)+s(X12),
+              family=poisson,data=datos)
+summary(model.gam_fulltp)
+```
+
+```{r}
+bondad = rbind(bondad, data.frame(AIC = AIC(model.gam_fulltp), dev = model.gam_fulltp$deviance))
+rownames(bondad)[nrow(bondad)] = "gam.full"
+bondad
+```
+
+Observemos que solo se rechaza el contraste de significación para la variable `X11`, lo que quiere decir que estas componentes se pueden considerar lineales en el modelo. 
+
+La devianza de este modelo es considerablemente menor que los obtenidos anteriormente. El *AIC* también es bastante menor pese a haber incluido bastante complejidad en el modelo. Notemos también un $R^2_{adj}$ de 0.997, lo que podría venir debido a un problema de concurvidad.
+
+```{r}
+concurvity(model.gam_fulltp)
+```
+
+Procedemos a eliminar del modelo las variables `X4` y `X7` pues presentan los valores más altos. 
+
+
+```{r}
+model.gam=gam(var_obj~s(X1_trans)+s(X2_trans)+s(X3)+s(X5)+s(X6)+s(X8)+s(X9)+
+               s(X10)+s(X11)+s(X12),
+             family=poisson,data=datos)
+summary(model.gam)
+```
+
+```{r}
+AIC(model.gam)
+```
+
+Los resultados son muy similares, y logramos reducir en gran medida el *AIC*. Sigamos estudiando la concurvidad.
+
+```{r}
+concurvity(model.gam)
+```
+
+Eliminamos ahora las variables `X5` y `X10`.
+
+```{r}
+model.gam=gam(var_obj~s(X1_trans)+s(X2_trans)+s(X3)+s(X6)+s(X8)
+              +s(X9)++s(X11)+s(X12),
+              family=poisson,data=datos)
+summary(model.gam)
+```
+
+```{r}
+AIC(model.gam)
+concurvity(model.gam)
+```
+
+
+Seguimos mejorando el AIC, mientras que el $R^2_{adj}$ y el porcentaje de la devianza explicada sigue invariante. 
+Por ello, continuemos eliminando variables del modelo, en este caso `X1_trans` y `X6`.
+
+```{r}
+model.gam=gam(var_obj~s(X2_trans)+s(X3)+s(X8)+s(X9)+s(X11)+s(X12),
+              family=poisson,data=datos)
+summary(model.gam)
+```
+```{r}
+AIC(model.gam)
+concurvity(model.gam)
+```
+
+Continuamos mejorando el *AIC* mientras que la bondad de ajuste del modelo sigue siendo idéntica. Hemos solucionado en este punto los problemas de concurvidad, pero se siguen rechazando con firmeza los contrastes individuales sobre las variables. Llegados a este punto, planteamos el modelo que incluye tan solo la variable `X11`, pues parece ser que las relaciones no lineales de esta con la variable objetivo explican casi por completo esta, y el modelo las está capturando.
+
+
+```{r}
+model.gam_X11tp=gam(var_obj~s(X11), family=poisson,data=datos)
+summary(model.gam_X11tp)
+```
+
+```{r}
+bondad = rbind(bondad, data.frame(AIC = AIC(model.gam_X11tp), dev = model.gam_X11tp$deviance))
+rownames(bondad)[nrow(bondad)] = "gam.X11tp"
+bondad
+```
+
+
+Observamos una disminución clara del *AIC* y un aumento no muy significante de la devianza residual. Hagamos el test anova para comparar con el modelo con todas las variables. 
+
+```{r}
+resultado_anova = anova.gam(model.gam_fulltp, model.gam_X11tp)
+diff_dev <- resultado_anova$Deviance[2]
+diff_df <- abs(resultado_anova$Df[2])
+
+pchisq(diff_dev, df = diff_df, lower.tail = FALSE)
+```
+Se acepta por tanto la igualdad de modelos y por tanto el modelo con tan solo la variable `X11` como regresora es el mejor, debido a su simplicidad. 
+
+```{r, warning = FALSE}
+ggplot(data = datos, aes(x = datos$X11, y = datos$var_obj)) +
+  geom_point() +
+  geom_line(aes(y = model.gam_X11tp$fitted.values), color = "blue") + 
+  labs(title = "Ajuste del modelo",
+       x = "X11",
+       y = "var_obj")
+  
+
+```
+
+Veamos como afecta la inlusión de la variable categórica.
+
+```{r}
+model.gam=gam(var_obj~s(X11,by=X13),family=poisson,data=datos)
+summary(model.gam)
+```
+
+```{r}
+data.frame(AIC = AIC(model.gam), dev = model.gam$deviance)
+```
+
+Mantenemos por tanto el modelo con `X11`.
+
+
+Veamos ahora el modelo con la variable `X11` modificando el tipo de spline. En primer lugar el spline de regresión de placa delgada penalizada.
+
+
+```{r}
+model.gam_X11ts=gam(var_obj~s(X11,bs="ts"),family=poisson,data=datos)
+summary(model.gam_X11ts)
+bondad = rbind(bondad, data.frame(AIC = AIC(model.gam_X11ts), dev = model.gam_X11ts$deviance))
+rownames(bondad)[nrow(bondad)] = "gam.X11ts"
+bondad
+```
+
+Usando splines de regresión cúbicos.
+
+```{r}
+model.gam_X11cr=gam(var_obj~s(X11,bs="cr"),family=poisson,data=datos)
+summary(model.gam_X11cr)
+bondad = rbind(bondad, data.frame(AIC = AIC(model.gam_X11cr), dev = model.gam_X11cr$deviance))
+rownames(bondad)[nrow(bondad)] = "gam.X11cr"
+bondad
+```
+
+Los resultados son muy similares.
+
+#### Regresión Polinómica
+
+Procedamos ahora al ajuste mediante regresiones de tipo polinómicas. Teniendo en cuenta los resultados anteriores, emplearemos `X11` como única variable regresora. Vamos a realizar una búsqueda del mejor modelo según el hiperparámetro del grado, tomando el test anova como criterio de selección.
+
+
+```{r}
+grados <- 1:10
+
+mejor_grado <- NULL
+mejor_modelo <- NULL
+mejor_anova_p <- 1
+
+modelo_anterior <- lm(var_obj ~ poly(X11, 1, raw = TRUE), data = datos)
+
+for (g in grados[-1]) {
+  modelo_actual <- lm(var_obj ~ poly(X11, g, raw = TRUE), data = datos)
+  
+  anova_resultado <- anova(modelo_anterior, modelo_actual)
+  p_valor <- anova_resultado$`Pr(>F)`[2]
+  
+  cat("Grado:", g, " ---- p-valor:", p_valor, "\n")
+
+  if (p_valor < 0.05) {
+    mejor_grado <- g
+    mejor_modelo <- modelo_actual
+    mejor_anova_p <- p_valor
+    modelo_anterior <- modelo_actual 
+  } else {
+    cat("No hay diferencias significativas entre grado", g, "y grado", g-1, "detenemos la búsqueda.\n")
+    break
+  }
+}
+cat("\nMejor grado:", mejor_grado, "con p-valor:", mejor_anova_p, "\n")
+summary(mejor_modelo)
+
+```
+
+Por tanto, el modelo seleccionado es el de grado 8. 
+
+```{r}
+model.poly_8 = mejor_modelo
+bondad = rbind(bondad, data.frame(AIC = AIC(model.poly_8), dev = NA))
+rownames(bondad)[nrow(bondad)] = "poly"
+bondad
+```
+
+
+```{r, warning = FALSE}
+ggplot(data = datos, aes(x = datos$X11, y = datos$var_obj)) +
+    geom_point() +
+    geom_line(aes(y = model.poly_8$fitted.values), color = "blue") + 
+    labs(title = "Ajuste del modelo",
+          x = "X11",
+          y = "var_obj")
+
+```
+
+
+El ajuste es realmente bueno, y tenemos un *AIC* bastante bajo.
+
+
+#### Regresión con Splines
+
+Emplearemos por último regresión con Splines. Tomaremos nodos en el 0 y 1, para tener en cuenta los cambios en la dependencia de `var_ob` y `X11`. 
+
+```{r}
+model.spline=lm(var_obj~bs(X11,knots=c(0,1)),data=datos)
+summary(model.spline)
+```
+
+
+```{r}
+bondad = rbind(bondad, data.frame(AIC = AIC(model.spline), dev = NA))
+rownames(bondad)[nrow(bondad)] = "spline"
+bondad
+```
+
+```{r, warning = FALSE}
+ggplot(data = datos, aes(x = datos$X11, y = datos$var_obj)) +
+  geom_point() +
+  geom_line(aes(y = model.spline$fitted.values), color = "blue") + 
+  labs(title = "Ajuste del modelo",
+       x = "X11",
+       y = "var_obj")
+```
+El ajuste es realmente bueno, pero se ha aumentado el *AIC* con respecto al modelo polinómico. 
+
+#### Elección del modelo final y evaluación de los resultados
+
+El modelo que mejores resultados de bondad ha dado es la regresión polinómica de grado 8. Vamos a realizar una evaluación del ajuste real y el posible sobreajuste.    
+
+
+```{r, warning = FALSE}
+set.seed(12345)
+ind = sample(1:nrow(datos), size = 2/3 * nrow(datos))
+
+train = datos[ind, ]
+test = datos[-ind, ]
+
+final_model = lm(var_obj~poly(X11, 8, raw = T), data = train)
+
+pred = predict(final_model, newdata = data.frame(X11 = test$X11))
+
+ggplot(data = test, aes(x = X11, y = var_obj)) +
+    geom_point() +
+    geom_line(aes(y = pred), color = "blue") +
+    labs(title = "Ajuste del modelo en el conjunto test",
+        x = "X11",
+        y = "var_obj")
+```
+
+Concluimos por tanto que el modelo polinomial logra una predicción realmente buena de la variable objetivo `var_obj`.
+
+
+
+
+
+
+
+
+
